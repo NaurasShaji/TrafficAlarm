@@ -9,16 +9,57 @@ class AlarmSetupScreen extends StatefulWidget {
   State<AlarmSetupScreen> createState() => _AlarmSetupScreenState();
 }
 
-class _AlarmSetupScreenState extends State<AlarmSetupScreen> {
+class _AlarmSetupScreenState extends State<AlarmSetupScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _destinationController = TextEditingController();
   DateTime _arrivalTime = DateTime.now().add(const Duration(hours: 1));
   int _bufferMinutes = 15;
   bool _isLoading = false;
+  
+  late AnimationController _rotationController;
+  late AnimationController _scaleController;
+  late Animation<double> _rotationAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize animation controllers
+    _rotationController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+    
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    // Initialize animations
+    _rotationAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _rotationController,
+      curve: Curves.linear,
+    ));
+    
+    _scaleAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.2,
+    ).animate(CurvedAnimation(
+      parent: _scaleController,
+      curve: Curves.easeInOut,
+    ));
+  }
 
   @override
   void dispose() {
     _destinationController.dispose();
+    _rotationController.dispose();
+    _scaleController.dispose();
     super.dispose();
   }
 
@@ -30,8 +71,64 @@ class _AlarmSetupScreenState extends State<AlarmSetupScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? _buildLoadingAnimation()
           : _buildForm(),
+    );
+  }
+
+  Widget _buildLoadingAnimation() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _rotationAnimation,
+            builder: (context, child) {
+              return Transform.rotate(
+                angle: _rotationAnimation.value * 2 * 3.14159,
+                child: AnimatedBuilder(
+                  animation: _scaleAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.blue[100],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.blue, width: 3),
+                        ),
+                        child: const Icon(
+                          Icons.alarm,
+                          size: 40,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Setting up your smart alarm...',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Calculating optimal wake time',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -172,6 +269,10 @@ class _AlarmSetupScreenState extends State<AlarmSetupScreen> {
       _isLoading = true;
     });
 
+    // Start animations
+    _rotationController.repeat();
+    _scaleController.repeat(reverse: true);
+
     try {
       final alarmManager = AlarmManager();
       await alarmManager.initialize();
@@ -183,10 +284,16 @@ class _AlarmSetupScreenState extends State<AlarmSetupScreen> {
       );
 
       if (mounted) {
+        // Stop animations
+        _rotationController.stop();
+        _scaleController.stop();
         Navigator.pop(context, true); // Return success
       }
     } catch (e) {
       if (mounted) {
+        // Stop animations
+        _rotationController.stop();
+        _scaleController.stop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error setting alarm: $e'),

@@ -10,6 +10,7 @@ import '../services/weather_service.dart';
 import '../services/news_service.dart';
 import '../services/spotify_service.dart';
 import '../services/osrm_service.dart';
+import '../services/alarm_sound_service.dart';
 
 class AlarmDisplayScreen extends StatefulWidget {
   final AlarmSettings alarm;
@@ -31,10 +32,13 @@ class _AlarmDisplayScreenState extends State<AlarmDisplayScreen> {
   final NewsService _newsService = NewsService();
   final SpotifyService _spotifyService = SpotifyService();
   final OSRMService _osrmService = OSRMService();
+  final AlarmSoundService _alarmSoundService = AlarmSoundService();
 
   late Timer _timer;
   late Duration _timeRemaining;
   bool _isAlarmTime = false;
+  bool _hasPlayedGentleAlarm = false;
+  bool _hasPlayedUrgentAlarm = false;
   
   RouteData? _routeData;
   WeatherData? _weatherData;
@@ -44,6 +48,7 @@ class _AlarmDisplayScreenState extends State<AlarmDisplayScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeAlarmSounds();
     _updateTimeRemaining();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTimeRemaining();
@@ -54,7 +59,12 @@ class _AlarmDisplayScreenState extends State<AlarmDisplayScreen> {
   @override
   void dispose() {
     _timer.cancel();
+    _alarmSoundService.stopAlarm();
     super.dispose();
+  }
+
+  Future<void> _initializeAlarmSounds() async {
+    await _alarmSoundService.initialize();
   }
 
   void _updateTimeRemaining() {
@@ -66,6 +76,40 @@ class _AlarmDisplayScreenState extends State<AlarmDisplayScreen> {
       _timeRemaining = difference.isNegative ? Duration.zero : difference;
       _isAlarmTime = _timeRemaining.inSeconds <= 0;
     });
+
+    // Play alarm sounds based on timing
+    _checkAndPlayAlarmSounds(now, alarmTime);
+  }
+
+  void _checkAndPlayAlarmSounds(DateTime now, DateTime alarmTime) {
+    // Calculate time differences
+    final timeToAlarm = alarmTime.difference(now).inMinutes;
+    final timeToArrival = widget.alarm.arrivalTime.difference(now).inMinutes;
+
+    // Play gentle alarm 10 minutes before calculated alarm time (estimated time)
+    if (timeToAlarm <= 10 && timeToAlarm > 0 && !_hasPlayedGentleAlarm) {
+      _hasPlayedGentleAlarm = true;
+      _alarmSoundService.playGentleAlarm(duration: const Duration(seconds: 30));
+      debugPrint('Playing gentle alarm - 10 minutes before calculated time');
+    }
+
+    // Play urgent alarm at the exact calculated alarm time (set time)
+    if (_isAlarmTime && !_hasPlayedUrgentAlarm) {
+      _hasPlayedUrgentAlarm = true;
+      _alarmSoundService.playUrgentAlarm(duration: const Duration(minutes: 2));
+      debugPrint('Playing urgent alarm - time to leave now!');
+    }
+
+    // Additional notification if user is cutting it close to arrival time
+    if (timeToArrival <= 5 && timeToArrival > 0 && _hasPlayedUrgentAlarm) {
+      _alarmSoundService.playNotification();
+      debugPrint('Playing notification - very close to arrival time');
+    }
+  }
+
+  void _stopAlarm() {
+    _alarmSoundService.stopAlarm();
+    setState(() {}); // Refresh UI to hide stop button
   }
 
   Future<void> _loadData() async {
@@ -295,6 +339,25 @@ class _AlarmDisplayScreenState extends State<AlarmDisplayScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            
+            // Stop Alarm Button (if alarm is playing)
+            if (_alarmSoundService.isPlaying) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _stopAlarm,
+                  icon: const Icon(Icons.volume_off),
+                  label: const Text('Stop Alarm Sound'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

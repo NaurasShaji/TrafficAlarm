@@ -109,9 +109,21 @@ class AlarmManager {
       // Save alarm
       await _saveAlarm(newAlarm);
       
-      // Schedule notification
-      await NotificationService.scheduleAlarm(
-        id: 1, // Use a fixed ID for the main alarm
+      // Schedule notifications
+      // Schedule gentle alarm 10 minutes before
+      final gentleAlarmTime = alarmTime.subtract(const Duration(minutes: 10));
+      if (gentleAlarmTime.isAfter(DateTime.now())) {
+        await NotificationService.scheduleGentleAlarm(
+          id: 0, // ID for gentle alarm
+          title: 'Get ready to leave',
+          body: 'Start preparing - you need to leave for $destination in 10 minutes',
+          scheduledTime: gentleAlarmTime,
+        );
+      }
+      
+      // Schedule urgent alarm at calculated time
+      await NotificationService.scheduleUrgentAlarm(
+        id: 1, // Use a fixed ID for the main urgent alarm
         title: 'Time to leave!',
         body: 'Leave now to reach $destination by ${_formatTime(arrivalTime)}',
         scheduledTime: alarmTime,
@@ -134,7 +146,8 @@ class AlarmManager {
     
     try {
       // Cancel any pending notifications
-await NotificationService.cancelAlarm(1);
+      await NotificationService.cancelAlarm(0); // Gentle alarm
+      await NotificationService.cancelAlarm(1); // Urgent alarm
       
       // Cancel any pending traffic checks
       if (!kIsWeb) {

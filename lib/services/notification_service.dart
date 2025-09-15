@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -74,17 +75,44 @@ class NotificationService {
       _channelId,
       _channelName,
       channelDescription: _channelDescription,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      showWhen: true,
+      styleInformation: BigTextStyleInformation(''),
+      sound: RawResourceAndroidNotificationSound('alarm_urgent'),
+      enableLights: true,
+      ledColor: Colors.red,
+      ledOnMs: 1000,
+      ledOffMs: 500,
+    ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      sound: 'alarm_urgent.caf',
+    ),
+  );
+
+  static const NotificationDetails _gentleNotificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
       showWhen: true,
       styleInformation: BigTextStyleInformation(''),
+      sound: RawResourceAndroidNotificationSound('alarm_gentle'),
     ),
     iOS: DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      sound: 'alarm_gentle.caf',
     ),
   );
 
@@ -115,6 +143,7 @@ class NotificationService {
     required String title,
     required String body,
     required DateTime scheduledTime,
+    bool isGentle = false,
   }) async {
     if (kIsWeb) {
       debugPrint('Web: Would schedule alarm - $title at $scheduledTime');
@@ -128,12 +157,14 @@ class NotificationService {
     }
     
     try {
+      final notificationDetails = isGentle ? _gentleNotificationDetails : _notificationDetails;
+      
       await _notifications.zonedSchedule(
         id,
         title,
         body,
         tz.TZDateTime.from(scheduledTime, tz.local),
-        _notificationDetails,
+        notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: 
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -141,6 +172,36 @@ class NotificationService {
     } catch (e) {
       debugPrint('Error scheduling notification: $e');
     }
+  }
+
+  static Future<void> scheduleGentleAlarm({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+  }) async {
+    await scheduleAlarm(
+      id: id,
+      title: title,
+      body: body,
+      scheduledTime: scheduledTime,
+      isGentle: true,
+    );
+  }
+
+  static Future<void> scheduleUrgentAlarm({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+  }) async {
+    await scheduleAlarm(
+      id: id,
+      title: title,
+      body: body,
+      scheduledTime: scheduledTime,
+      isGentle: false,
+    );
   }
   
   static Future<void> cancelAlarm(int id) async {
